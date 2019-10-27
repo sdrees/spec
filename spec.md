@@ -1,388 +1,563 @@
-# CloudEvents - Version 0.1
+# CloudEvents - Version 1.0
 
 ## Abstract
 
-CloudEvents is a vendor-neutral specification for defining the format
-of event data.
+CloudEvents is a vendor-neutral specification for defining the format of event
+data.
 
 ## Status of this document
 
 This document is a working draft.
 
 ## Table of Contents
+
 - [Overview](#overview)
-- [Design Goals](#design-goals)
 - [Notations and Terminology](#notations-and-terminology)
 - [Context Attributes](#context-attributes)
-- [Use-Cases](about/use-cases.md)
-- [References](about/references.md)
+- [Event Data](#event-data)
+- [Size Limits](#size-limits)
+- [Privacy & Security](#privacy-and-security)
+- [Example](#example)
 
 ## Overview
-Events are everywhere. However, event publishers tend to describe events
+
+Events are everywhere. However, event producers tend to describe events
 differently.
 
 The lack of a common way of describing events means developers are constantly
-re-learning how to receive events. This also limits the potential for libraries,
-tooling and infrastructure to aide the delivery of event data across
-environments, like SDKs, event routers or tracing systems. The portability
-and productivity that can be achieved from event data is hindered overall.
+re-learning how to consume events. This also limits the potential for libraries,
+tooling and infrastructure to aid the delivery of event data across
+environments, like SDKs, event routers or tracing systems. The portability and
+productivity that can be achieved from event data is hindered overall.
 
-Enter CloudEvents, a specification for describing event data in a common way.
-CloudEvents seeks to ease event declaration and delivery across services,
-platforms and beyond.
+CloudEvents is a specification for describing event data in common formats to
+provide interoperability across services, platforms and systems.
 
 Event Formats specify how to serialize a CloudEvent with certain encoding
-formats. Compliant CloudEvents implementations that support those encodings
-MUST adhere to the encoding rules specified in the respective event format.
-All implementations MUST support the [JSON format](json-format.md).
+formats. Compliant CloudEvents implementations that support those encodings MUST
+adhere to the encoding rules specified in the respective event format. All
+implementations MUST support the [JSON format](json-format.md).
 
-# Design Goals
-
-CloudEvents are typically used in a distributed system to allow for services to
-be loosely coupled during development, deployed independently, and later
-can be connected to create new applications.
-
-The goal of the CloudEvents specification is to define interoperability of event
-systems that allow services to produce or consume events, where the producer and
-consumer can be developed and deployed independently.  A producer can generate
-events before a consumer is listening, and a consumer can express an interest in
-an event or class of events that is not yet being produced.
-
-To this end, the specification will include common metadata attributes of an
-event that facilitate interoperability, where the event does not contain any
-details about the consumer or transport that might be used to send the event.
-
-## Non-Goals
-The following will not be part of the specification:
-* Function build and invocation process
-* Language-specific runtime APIs
-* Selecting a single identity/access control system
-
-## Usage Scenarios
-
-The list below enumerates key usage scenarios and developer perspectives
-that have been considered for the development of this specification.
-These usage scenarios are by no means exhaustive, and the specification
-does not aim to be prescriptive about usage.
-
-These scenarios are not normative; anyone is free to create a system that
-mixes these scenarios. These cases establish a common vocabulary of event
-producer, consumer, middleware, and framework.
-
-In these scenarios, we keep the roles of event producer and event consumer
-distinct. A single application context can always take on multiple roles
-concurrently, including being both a producer and a consumer of events.
-
-1) Applications produce events for consumption by other parties, for instance
-   for providing consumers with insights about end-user activities, state
-   changes or environment observations, or for allowing complementing the
-   application's capabilities with event-driven extensions.
-
-   Events are typically produced related to a context or a producer-chosen
-   classification. For example, a temperature sensor in a room might be
-   context-qualified by mount position, room, floor, and building. A sports
-   result might be classified by league and team.
-
-   The producer application could run anywhere, such as on a server or a device.
-
-   The produced events might be rendered and emitted directly by the producer
-   or by an intermediary; as example for the latter, consider event data
-   transmitted by a device over payload-size-constrained networks such as
-   LoRaWAN or ModBus, and where events compliant to this
-   specification will be rendered by a network gateway on behalf of the
-   producer.
-
-   For example, a weather station transmits a 12-byte, proprietary event
-   payload indicating weather conditions once every 5 minutes over LoRaWAN. A
-   LoRaWAN gateway is then used to publish the event to an Internet destination
-   in the CloudEvents format. The LoRaWAN gateway is the event producer,
-   publishing on behalf of the weather station, and will set event metadata
-   appropriately to reflect the source of the event.
-
-2) Applications consume events for the purposes such as display, archival,
-   analytics, workflow processing, monitoring the condition and/or providing
-   transparency into the operation of a business solution and its foundational
-   building blocks.
-
-   The consumer application could run anywhere, such as on a server or a
-   device.
-
-   A consuming application will typically be interested in:
-   - distinguishing events such that the exact same event is not
-     processed twice.
-   - identifying and selecting the origin context or the
-     producer-assigned classification.
-   - identifying the temporal order of the events relative to the
-     originating context and/or relative to a wall-clock.
-   - understanding the context-related detail information carried
-     in the event.
-   - correlating event instances from multiple event producers and send
-     them to the same consumer context.
-
-   In some cases, the consuming application might be interested in:
-   - obtaining further details about the event's subject from the
-     originating context, like obtaining detail information about a
-     changed object that requires privileged access authorization.
-     For example, a HR solution might only publish very limited
-     information in events for privacy reasons, and any event consumer
-     needing more data will have to obtain details related to the event
-     from the HR system under their own authorization context.
-   - interact with the event's subject at the originating context,
-     for instance reading a storage blob after having been informed
-     that this blob has just been created.
-
-   Consumer interests motivate requirements for which information
-   producers ought to include an event.
-
-3) Middleware routes events from producers to consumers, or onwards
-   to other middleware. Applications producing events might delegate
-   certain tasks arising from their consumers' requirements to
-   middleware:
-
-   - Management of many concurrent interested consumers for one of
-     multiple classes or originating contexts of events
-   - Processing of filter conditions over a class or originating context
-     of events on behalf of consumers.
-   - Transcoding, like encoding in MsgPack after decoding from JSON
-   - Transformation that changes the event's structure, like mapping from
-     a proprietary format to CloudEvents, while preserving the
-     identity and semantic integrity of the event.
-   - Instant "push-style" delivery to interested consumers.
-   - Storing events for eventual delivery, either for pick-up initiated
-     by the consumer ("pull"), or initiated by the middleware ("push")
-     after a delay.
-   - Observing event content or event flow for monitoring or
-     diagnostics purposes.
-
-   To satisfy these needs, middleware will be interested in:
-   - A metadata discriminator usable for classification or
-     contextualization of events so that consumers can express interest
-     in one or multiple such classes or contexts.
-     For instance, a consumer might be interested in all events related
-     to a specific directory inside a file storage account.
-   - A metadata discriminator that allows distinguishing the subject of
-     a particular event of that class or context.
-     For instance, a consumer might want to filter out all events related
-     to new files ending with ".jpg" (the file name being the "new file"
-     event's subject) for the context describing specific directory
-     inside a file storage account that it has registered interest on.
-   - An indicator for the encoding of the event and its data.
-   - An indicator for the structural layout (schema) for the event and
-     its data.
-
-   Whether its events are available for consumption via a middleware is
-   a delegation choice of the producer.
-
-   In practice, middleware can take on role of a producer when it changes
-   the semantic meaning of an event, a consumer when it takes action based
-   on an event, or middleware when it routes events without making semantic
-   changes.
-
-4) Frameworks and other abstractions make interactions with event platform
-   infrastructure simpler, and often provide common API surface areas
-   for multiple event platform infrastructures.
-
-   Frameworks are often used for turning events into an object graph,
-   and to dispatch the event to some specific handling user-code or
-   user-rule that permits the consuming application to react to
-   a particular kind of occurrence in the originating context and
-   on a particular subject.
-
-   Frameworks are most interested in semantic metadata commonality
-   across the platforms they abstract, so that similar activities can
-   be handled uniformly.
-
-   For a sports application, a developer using the framework might be
-   interested in all events from today's game (subject) of a team in a
-   league (topic of interest), but wanting to handle reports
-   of "goal" differently than reports of "substitution".
-   For this, the framework will need a suitable metadata discriminator
-   that frees it from having to understand the event details.
+For more information on the history, development and design rationale behind the
+specification, see the [CloudEvents Primer](primer.md) document.
 
 ## Notations and Terminology
 
 ### Notational Conventions
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
-"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to
-be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
+"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
 
-### Attribute Naming Convention
-
-CloudEvents attributes use "camelCasing" for the object member names, to aid
-integration with common programming languages.
-
-Attribute names that are composed of multiple words are expressed as compound
-words, with the first word starting with a lower-case character and all
-subsequent words starting with an upper-case character, and no separator
-characters.
-
-Words that are acronyms are written in all-caps, e.g. "ID" and "URL".
+For clarity, when a feature is marked as "OPTIONAL" this means that it is
+OPTIONAL for both the [Producer](#producer) and [Consumer](#consumer) of a
+message to support that feature. In other words, a producer can choose to
+include that feature in a message if it wants, and a consumer can choose to
+support that feature if it wants. A consumer that does not support that feature
+will then silently ignore that part of the message. The producer needs to be
+prepared for the situation where a consumer ignores that feature. An
+[Intermediary](#intermediary) SHOULD forward OPTIONAL attributes.
 
 ### Terminology
 
 This specification defines the following terms:
 
 #### Occurrence
-An "occurrence" is the capture of a statement of fact during the operation of
-a software system. This might occur because of a signal raised by the system or
-a signal being observed by the system, because of a state change, because of
-a timer elapsing, or any other noteworthy activity. For example, a device might
-go into an alert state because the battery is low, or a virtual machine is
-about to perform a scheduled reboot.
+
+An "occurrence" is the capture of a statement of fact during the operation of a
+software system. This might occur because of a signal raised by the system or a
+signal being observed by the system, because of a state change, because of a
+timer elapsing, or any other noteworthy activity. For example, a device might go
+into an alert state because the battery is low, or a virtual machine is about to
+perform a scheduled reboot.
 
 #### Event
-An "event" is a data record expressing an occurrence and its context. Events
-are routed from the emitting source to interested parties for the purpose of
-notifying them about the source occurrence. The routing can be performed based
-on information contained in the event, but an event will not identify
-a specific routing destination.
+
+An "event" is a data record expressing an occurrence and its context. Events are
+routed from an event producer (the source) to interested event consumers. The
+routing can be performed based on information contained in the event, but an
+event will not identify a specific routing destination. Events will contain two
+types of information: the [Event Data](#event-data) representing the Occurrence
+and [Context](#context) metadata providing contextual information about the
+Occurrence. A single occurrence MAY result in more than one event.
+
+#### Producer
+
+The "producer" is a specific instance, process or device that creates the data
+structure describing the CloudEvent.
+
+#### Source
+
+The "source" is the context in which the occurrence happened. In a distributed
+system it might consist of multiple [Producers](#producer). If a source is not
+aware of CloudEvents, an external producer creates the CloudEvent on behalf of
+the source.
+
+#### Consumer
+
+A "consumer" receives the event and acts upon it. It uses the context and data
+to execute some logic, which might lead to the occurrence of new events.
+
+#### Intermediary
+
+An "intermediary" receives a message containing an event for the purpose of
+forwarding it to the next receiver, which might be another intermediary or a
+[Consumer](#consumer). A typical task for an intermediary is to route the event
+to receivers based on the information in the [Context](#context).
 
 #### Context
-As described in the Event definition, an Event contains two parts, the data
-representing the Occurrence and additional metadata that provides other
-circumstantial information about the Occurrence (e.g. information about the
-originating system). This additional metadata is referred to as Context data.
-Tools and application code can use this information to identify the
-relationship of Events to aspects of the system or to other Events.
 
-#### Message
-Events are transported from a source to a destination via messages.
+Context metadata will be encapsulated in the
+[Context Attributes](#context-attributes). Tools and application code can use
+this information to identify the relationship of Events to aspects of the system
+or to other Events.
 
 #### Data
-Domain-specific information about the occurrence (i.e. the payload). This
-might include information about the occurrence, details about the data
-that was changed, or more.
+
+Domain-specific information about the occurrence (i.e. the payload). This might
+include information about the occurrence, details about the data that was
+changed, or more. See the [Event Data](#event-data) section for more
+information.
+
+#### Event Format
+
+An Event Format specifies how to serialize a CloudEvent as a sequence of bytes.
+Stand-alone event formats, such as the [JSON format](json-format.md), specify
+serialization independent of any protocol or storage medium. Protocol Bindings
+MAY define formats that are dependent on the protocol.
+
+#### Message
+
+Events are transported from a source to a destination via messages.
+
+A "structured-mode message" is one where the event is fully encoded using
+a stand-alone event format and stored in the message body.
+
+A "binary-mode message" is one where the event data is stored in the message
+body, and event attributes are stored as part of message meta-data.
 
 #### Protocol
+
 Messages can be delivered through various industry standard protocol (e.g. HTTP,
-AMQP, MQTT, SMTP), open-source protocols (e.g. Kafka, NATS), or
-platform/vendor specific protocols (AWS Kinesis, Azure Event Grid).
+AMQP, MQTT, SMTP), open-source protocols (e.g. Kafka, NATS), or platform/vendor
+specific protocols (AWS Kinesis, Azure Event Grid).
 
-## Type System
+#### Protocol Binding
 
-The following abstract data types are available for use in attributes.
-
-- `String` - Sequence of printable Unicode characters.
-- `Binary` - Sequence of bytes.
-- `Map` - `String`-indexed dictionary of `Object`-typed values
-- `Object` - Either a `String`, or a `Binary`, or a `Map`
-- `URI` - String expression conforming to `URI-reference`
-  as defined in
-  [RFC 3986 §4.1](https://tools.ietf.org/html/rfc3986#section-4.1).
-- `Timestamp` - String expression as defined in
-  [RFC 3339](https://tools.ietf.org/html/rfc3339)
-
-This specification does not define numeric or logical types.
-
-The `Object` type is a variant type that can take the shape of either a
-`String` or a `Binary` or a `Map`. The type system is intentionally
-abstract, and therefore it is left to implementations how to represent the
-variant type.
+A protocol binding describes how events are sent and received over a given
+protocol, in particular how events are mapped to messages in that protocol.
 
 ## Context Attributes
-Every event conforming to this specification MUST include a context.
 
-Context is designed such that it can be delivered separately from the event
-data (e.g. in protocol headers or protocol specific attributes). This allows
-the context to be inspected at the destination without having to deserialize
-the event data. The context might also need to be serialized with the event
-data for some use cases (e.g. a JSON implementation might use one JSON object
-that contains both context and data).
+Every CloudEvent conforming to this specification MUST include context
+attributes designated as REQUIRED, MAY include one or more OPTIONAL context
+attributes and MAY include one or more extension attributes.
 
-### eventType
-* Type: `String`
-* Description: Type of occurrence which has happened. Often this
-  property is used for routing, observability, policy enforcement, etc.
-* Constraints:
-   * REQUIRED
-   * MUST be a non-empty string
-   * SHOULD be prefixed with a reverse-DNS name. The prefixed domain dictates
-            the organization which defines the semantics of this event type.
-* Examples
-   * com.github.pull.create
+These attributes, while descriptive of the event, are designed such that they
+can be serialized independent of the event data. This allows for them to be
+inspected at the destination without having to deserialize the event data.
 
-### eventTypeVersion
-* Type: `String`
-* Description: The version of the `eventType`. This enables the interpretation
-  of `data` by eventual consumers, requires the consumer to be knowledgeable
-  about the producer.
-* Constraints:
-  * OPTIONAL
-  * If present, MUST be a non-empty string
+### Attribute Naming Convention
 
-### cloudEventsVersion
-* Type: `String`
-* Description: The version of the CloudEvents specification which the event
-  uses. This enables the interpretation of the context.
-* Constraints:
-  * REQUIRED
-  * MUST be a non-empty string
+The CloudEvents specifications define mappings to various protocols and
+encodings, and the accompanying CloudEvents SDK targets various runtimes and
+languages. Some of these treat metadata elements as case-sensitive while others
+do not, and a single CloudEvent might be routed via multiple hops that involve a
+mix of protocols, encodings, and runtimes. Therefore, this specification limits
+the available character set of all attributes such that case-sensitivity issues
+or clashes with the permissible character set for identifiers in common
+languages are prevented.
 
-### source
-* Type: `URI`
-* Description: This describes the event producer. Often this will include
-  information such as the type of the event source, the organization
-  publishing the event, and some unique idenfitiers. The exact syntax and
-  semantics behind the data encoded in the URI is event producer defined.
-* Constraints:
-  * REQUIRED
+CloudEvents attribute names MUST consist of lower-case letters ('a' to 'z') or
+digits ('0' to '9') from the ASCII character set. Attribute names SHOULD be
+descriptive and terse and SHOULD NOT exceed 20 characters in length.
 
-### eventID
-* Type: `String`
-* Description: ID of the event. The semantics of this string are explicitly
-  undefined to ease the implementation of producers. Enables deduplication.
-* Examples:
-  * A database commit ID
-* Constraints:
-  * REQUIRED
-  * MUST be a non-empty string
-  * MUST be unique within the scope of the producer
+### Type System
 
-### eventTime
-* Type: `Timestamp`
-* Description: Timestamp of when the event happened.
-* Constraints:
-  * OPTIONAL
-  * If present, MUST adhere to the format specified in
+The following abstract data types are available for use in attributes. Each of
+these types MAY be represented differently by different event formats and in
+protocol metadata fields. This specification defines a canonical
+string-encoding for each type that MUST be supported by all implementations.
+
+- `Boolean` - a boolean value of "true" or "false".
+  - String encoding: a case-sensitive value of `true` or `false`.
+- `Integer` - A whole number in the range -2,147,483,648 to +2,147,483,647
+  inclusive. This is the range of a signed, 32-bit, twos-complement encoding.
+  Event formats do not have to use this encoding, but they MUST only use
+  `Integer` values in this range.
+  - String encoding: Integer portion of the JSON Number per
+    [RFC 7159, Section 6](https://tools.ietf.org/html/rfc7159#section-6)
+- `String` - Sequence of allowable Unicode characters. The following characters
+  are disallowed:
+  - the "control characters" in the ranges U+0000-U+001F and U+007F-U+009F (both
+    ranges inclusive), since most have no agreed-on meaning, and some, such as
+    U+000A (newline), are not usable in contexts such as HTTP headers.
+  - code points
+    [identified as noncharacters by Unicode](http://www.unicode.org/faq/private_use.html#noncharacters).
+  - code points identifying Surrogates, U+D800-U+DBFF and U+DC00-U+DFFF, both
+    ranges inclusive, unless used properly in pairs. Thus (in JSON notation)
+    "\uDEAD" is invalid because it is an unpaired surrogate, while
+    "\uD800\uDEAD" would be legal.
+- `Binary` - Sequence of bytes.
+  - String encoding: Base64 encoding per
+    [RFC4648](https://tools.ietf.org/html/rfc4648).
+- `URI` - Absolute uniform resource identifier.
+  - String encoding: `Absolute URI` as defined in
+    [RFC 3986 Section 4.3](https://tools.ietf.org/html/rfc3986#section-4.3).
+- `URI-reference` - Uniform resource identifier reference.
+  - String encoding: `URI-reference` as defined in
+    [RFC 3986 Section 4.1](https://tools.ietf.org/html/rfc3986#section-4.1).
+- `Timestamp` - Date and time expression using the Gregorian Calendar.
+  - String encoding: [RFC 3339](https://tools.ietf.org/html/rfc3339).
+
+All context attribute values MUST be of one of the types listed above.
+Attribute values MAY be presented as native types or canonical strings.
+
+A strongly-typed programming model that represents a CloudEvent or any extension
+MUST be able to convert from and to the canonical string-encoding to the
+runtime/language native type that best corresponds to the abstract type.
+
+For example, the `time` attribute might be represented by the language's native
+_datetime_ type in a given implementation, but it MUST be settable providing an
+RFC3339 string, and it MUST be convertible to an RFC3339 string when mapped to a
+header of an HTTP message.
+
+A CloudEvents protocol binding or event format implementation MUST likewise be
+able to convert from and to the canonical string-encoding to the corresponding
+data type in the encoding or in protocol metadata fields.
+
+An attribute value of type `Timestamp` might indeed be routed as a string
+through multiple hops and only materialize as a native runtime/language type at
+the producer and ultimate consumer. The `Timestamp` might also be routed as a
+native protocol type and might be mapped to/from the respective
+language/runtime types at the producer and consumer ends, and never materialize
+as a string.
+
+The choice of serialization mechanism will determine how the context attributes
+and the event data will be serialized. For example, in the case of a JSON
+serialization, the context attributes and the event data might both appear
+within the same JSON object.
+
+### REQUIRED Attributes
+
+The following attributes are REQUIRED to be present in all CloudEvents:
+
+#### id
+
+- Type: `String`
+- Description: Identifies the event. Producers MUST ensure that `source` + `id`
+  is unique for each distinct event. If a duplicate event is re-sent (e.g. due
+  to a network error) it MAY have the same `id`. Consumers MAY assume that
+  Events with identical `source` and `id` are duplicates.
+- Examples:
+  - An event counter maintained by the producer
+  - A UUID
+- Constraints:
+  - REQUIRED
+  - MUST be a non-empty string
+  - MUST be unique within the scope of the producer
+
+#### source
+
+- Type: `URI-reference`
+- Description: Identifies the context in which an event happened. Often this
+  will include information such as the type of the event source, the
+  organization publishing the event or the process that produced the event. The
+  exact syntax and semantics behind the data encoded in the URI is defined by
+  the event producer.
+
+  Producers MUST ensure that `source` + `id` is unique for each distinct event.
+
+  An application MAY assign a unique `source` to each distinct producer, which
+  makes it easy to produce unique IDs since no other producer will have the same
+  source. The application MAY use UUIDs, URNs, DNS authorities or an
+  application-specific scheme to create unique `source` identifiers.
+
+  A source MAY include more than one producer. In that case the producers MUST
+  collaborate to ensure that `source` + `id` is unique for each distinct event.
+
+- Constraints:
+  - REQUIRED
+  - MUST be a non-empty URI-reference
+  - An absolute URI is RECOMMENDED
+- Examples
+  - Internet-wide unique URI with a DNS authority.
+    - https://github.com/cloudevents
+    - mailto:cncf-wg-serverless@lists.cncf.io
+  - Universally-unique URN with a UUID:
+    - urn:uuid:6e8bc430-9c3a-11d9-9669-0800200c9a66
+  - Application-specific identifiers
+    - /cloudevents/spec/pull/123
+    - /sensors/tn-1234567/alerts
+    - 1-555-123-4567
+
+#### specversion
+
+- Type: `String`
+- Description: The version of the CloudEvents specification which the event
+  uses. This enables the interpretation of the context. Compliant event
+  producers MUST use a value of `1.0` when referring to this version of the
+  specification.
+- Constraints:
+  - REQUIRED
+  - MUST be a non-empty string
+
+#### type
+
+- Type: `String`
+- Description: This attribute contains a value describing the type of event
+  related to the originating occurrence. Often this attribute is used for
+  routing, observability, policy enforcement, etc. The format of this is
+  producer defined and might include information such as the version of the
+  `type` - see
+  [Versioning of Attributes in the Primer](primer.md#versioning-of-attributes)
+  for more information.
+- Constraints:
+  - REQUIRED
+  - MUST be a non-empty string
+  - SHOULD be prefixed with a reverse-DNS name. The prefixed domain dictates the
+    organization which defines the semantics of this event type.
+- Examples
+  - com.github.pull.create
+  - com.example.object.delete.v2
+
+### OPTIONAL Attributes
+
+The following attributes are OPTIONAL to appear in CloudEvents. See the
+[Notational Conventions](#notational-conventions) section for more information
+on the definition of OPTIONAL.
+
+#### datacontenttype
+
+- Type: `String` per [RFC 2046](https://tools.ietf.org/html/rfc2046)
+- Description: Content type of `data` value. This attribute enables `data` to
+  carry any type of content, whereby format and encoding might differ from that
+  of the chosen event format. For example, an event rendered using the
+  [JSON envelope](./json-format.md#3-envelope) format might carry an XML payload
+  in `data`, and the consumer is informed by this attribute being set to
+  "application/xml". The rules for how `data` content is rendered for different
+  `datacontenttype` values are defined in the event format specifications; for
+  example, the JSON event format defines the relationship in
+  [section 3.1](./json-format.md#31-handling-of-data).
+
+  For some binary mode protocol bindings, this field is directly mapped to the
+  respective protocol's content-type metadata property. Normative rules for the
+  binary mode and the content-type metadata mapping can be found in the
+  respective protocol
+
+  In some event formats the `datacontenttype` attribute MAY be omitted. For
+  example, if a JSON format event has no `datacontenttype` attribute, then it is
+  implied that the `data` is a JSON value conforming to the "application/json"
+  media type. In other words: a JSON-format event with no `datacontenttype` is
+  exactly equivalent to one with `datacontenttype="application/json"`.
+
+  When translating an event message with no `datacontenttype` attribute to a
+  different format or protocol binding, the target `datacontenttype` SHOULD be
+  set explicitly to the implied `datacontenttype` of the source.
+
+- Constraints:
+  - OPTIONAL
+  - If present, MUST adhere to the format specified in
+    [RFC 2046](https://tools.ietf.org/html/rfc2046)
+- For Media Type examples see
+  [IANA Media Types](http://www.iana.org/assignments/media-types/media-types.xhtml)
+
+#### dataschema
+
+- Type: `URI`
+- Description: Identifies the schema that `data` adheres to. Incompatible
+  changes to the schema SHOULD be reflected by a different URI. See
+  [Versioning of Attributes in the Primer](primer.md#versioning-of-attributes)
+  for more information.
+- Constraints:
+  - OPTIONAL
+  - If present, MUST be a non-empty URI
+
+#### subject
+
+- Type: `String`
+- Description: This describes the subject of the event in the context of the
+  event producer (identified by `source`). In publish-subscribe scenarios, a
+  subscriber will typically subscribe to events emitted by a `source`, but the
+  `source` identifier alone might not be sufficient as a qualifier for any
+  specific event if the `source` context has internal sub-structure.
+
+  Identifying the subject of the event in context metadata (opposed to only in
+  the `data` payload) is particularly helpful in generic subscription filtering
+  scenarios where middleware is unable to interpret the `data` content. In the
+  above example, the subscriber might only be interested in blobs with names
+  ending with '.jpg' or '.jpeg' and the `subject` attribute allows for
+  constructing a simple and efficient string-suffix filter for that subset of
+  events.
+
+- Constraints:
+  - OPTIONAL
+  - If present, MUST be a non-empty string
+- Example:
+  - A subscriber might register interest for when new blobs are created inside a
+    blob-storage container. In this case, the event `source` identifies the
+    subscription scope (storage container), the `type` identifies the "blob
+    created" event, and the `id` uniquely identifies the event instance to
+    distinguish separate occurrences of a same-named blob having been created;
+    the name of the newly created blob is carried in `subject`:
+    - `source`: https://example.com/storage/tenant/container
+    - `subject`: mynewfile.jpg
+
+#### time
+
+- Type: `Timestamp`
+- Description: Timestamp of when the occurrence happened. If the time of the
+  occurrence cannot be determined then this attribute MAY be set to some other
+  time (such as the current time) by the CloudEvents producer, however all
+  producers for the same `source` MUST be consistent in this respect. In other
+  words, either they all use the actual time of the occurrence or they all use
+  the same algorithm to determine the value used.
+- Constraints:
+  - OPTIONAL
+  - If present, MUST adhere to the format specified in
     [RFC 3339](https://tools.ietf.org/html/rfc3339)
 
-### schemaURL
-* Type: `URI`
-* Description: A link to the schema that the `data` attribute adheres to.
-* Constraints:
-  * OPTIONAL
-  * If present, MUST adhere to the format specified in
-    [RFC 3986](https://tools.ietf.org/html/rfc3986)
+### Extension Context Attributes
 
-### contentType
-* Type: `String` per [RFC 2046](https://tools.ietf.org/html/rfc2046)
-* Description: Describe the data encoding format
-* Constraints:
-  * OPTIONAL
-  * If present, MUST adhere to the format specified in
-    [RFC 2046](https://tools.ietf.org/html/rfc2046)
-* For Media Type examples see [IANA Media Types](http://www.iana.org/assignments/media-types/media-types.xhtml)
+A CloudEvent MAY include any number of additional context attributes with
+distinct names, known as "extension attributes". Extension attributes MUST
+follow the same [naming convention](#attribute-naming-convention) and use the
+same [type system](#type-system) as standard attributes. Extension attributes
+have no defined meaning in this specification, they allow external systems to
+attach metadata to an event, much like HTTP custom headers.
 
-### extensions
-* Type: `Map`
-* Description: This is for additional metadata and this does not have a
-  mandated structure. This enables a place for custom fields a producer or
-  middleware might want to include and provides a place to test metadata before
-  adding them to the CloudEvents specification.
-  See the [Extensions](extensions.md) document for a list of possible
-  properties.
-* Constraints:
-  * OPTIONAL
-  * If present, MUST contain at least one entry
-* Examples:
-  * authorization data
+Extension attributes are always serialized according to binding rules like
+standard attributes. However this specification does not prevent an extension
+from copying event attribute values to other parts of a message, in order to
+interact with non-CloudEvents systems that also process the message. Extension
+specifications that do this SHOULD specify how receivers are to interpret
+messages if the copied values differ from the cloud-event serialized values.
 
-### data
-* Type: `Object`
-* Description: The event payload. The payload depends on the eventType,
-  schemaURL and eventTypeVersion, the payload is encoded into a media format
-  which is specified by the contentType attribute (e.g. application/json).
-* Constraints:
-  * OPTIONAL
+#### Defining Extensions
 
+See
+[CloudEvent Attributes Extensions](primer.md#cloudevent-attribute-extensions)
+for additional information concerning the use and definition of extensions.
+
+The definition of an extension SHOULD fully define all aspects of the
+mattribute - e.g. its name, type, semantic meaning and possible values. New
+extension definitions SHOULD use a name that is descriptive enough to reduce the
+chances of name collisions with other extensions. In particular, extension
+authors SHOULD check the [documented extensions](documented-extensions.md)
+document for the set of known extensions - not just for possible name conflicts
+but for extensions that might be of interest.
+
+Many protocols support the ability for senders to include additional metadata,
+for example as HTTP headers. While a CloudEvents receiver is not mandated to
+process and pass them along, it is RECOMMENDED that they do so via some
+mechanism that makes it clear they are non-CloudEvents metadata.
+
+Here is an example that illustrates the need for additional attributes. In many
+IoT and enterprise use cases, an event could be used in a serverless application
+that performs actions across multiple types of events. To support such use
+cases, the event producer will need to add additional identity attributes to the
+"context attributes" which the event consumers can use to correlate this event
+with the other events. If such identity attributes happen to be part of the
+event "data", the event producer would also add the identity attributes to the
+"context attributes" so that event consumers can easily access this information
+without needing to decode and examine the event data. Such identity attributes
+can also be used to help intermediate gateways determine how to route the
+events.
+
+## Event Data
+
+As defined by the term [Data](#data), CloudEvents MAY include domain-specific
+information about the occurrence. When present, this information will be
+encapsulated within `data`.
+
+- Description: The event payload. This specification does not place any
+  restriction on the type of this information. It is encoded into a media format
+  which is specified by the `datacontenttype` attribute (e.g. application/json),
+  and adheres to the `dataschema` format when those respective attributes are
+  present.
+
+- Constraints:
+  - OPTIONAL
+
+# Size Limits
+
+In many scenarios, CloudEvents will be forwarded through one or more generic
+intermediaries, each of which might impose limits on the size of forwarded
+events. CloudEvents might also be routed to consumers, like embedded devices,
+that are storage or memory-constrained and therefore would struggle with large
+singular events.
+
+The "size" of an event is its wire-size and includes every bit that is
+transmitted on the wire for the event: protocol frame-metadata, event metadata,
+and event data, based on the chosen event format and the chosen protocol
+binding.
+
+If an application configuration requires for events to be routed across
+different protocols or for events to be re-encoded, the least efficient
+protocol and encoding used by the application SHOULD be considered for
+compliance with these size constraints:
+
+- Intermediaries MUST forward events of a size of 64 KByte or less.
+- Consumers SHOULD accept events of a size of at least 64 KByte.
+
+In effect, these rules will allow producers to publish events up to 64KB in size
+safely. Safely here means that it is generally reasonable to expect the event to
+be accepted and retransmitted by all intermediaries. It is in any particular
+consumer's control, whether it wants to accept or reject events of that size due
+to local considerations.
+
+Generally, CloudEvents publishers SHOULD keep events compact by avoiding
+embedding large data items into event payloads and rather use the event payload
+to link to such data items. From an access control perspective, this approach
+also allows for a broader distribution of events, because accessing
+event-related details through resolving links allows for differentiated access
+control and selective disclosure, rather than having sensitive details embedded
+in the event directly.
+
+# Privacy and Security
+
+Interoperability is the primary driver behind this specification, enabling such
+behavior requires some information to be made available _in the clear_ resulting
+in the potential for information leakage.
+
+Consider the following to prevent inadvertent leakage especially when leveraging
+3rd party platforms and communication networks:
+
+- Context Attributes
+
+  Sensitive information SHOULD NOT be carried or represented in context
+  attributes.
+
+  CloudEvent producers, consumers, and intermediaries MAY introspect and log
+  context attributes.
+
+- Data
+
+  Domain specific [event data](#event-data) SHOULD be encrypted to restrict
+  visibility to trusted parties. The mechanism employed for such encryption is
+  an agreement between producers and consumers and thus outside the scope of
+  this specification.
+
+- Protocol Bindings
+
+  Protocol level security SHOULD be employed to ensure the trusted and secure
+  exchange of CloudEvents.
+
+# Example
+
+The following example shows a CloudEvent serialized as JSON:
+
+```JSON
+{
+    "specversion" : "1.0",
+    "type" : "com.github.pull.create",
+    "source" : "https://github.com/cloudevents/spec/pull",
+    "subject" : "123",
+    "id" : "A234-1234-1234",
+    "time" : "2018-04-05T17:31:00Z",
+    "comexampleextension1" : "value",
+    "comexampleothervalue" : 5,
+    "datacontenttype" : "text/xml",
+    "data" : "<much wow=\"xml\"/>"
+}
+```
